@@ -147,7 +147,7 @@ Payload stored: `{ conversationId, senderName (resolved from event or future enr
 
 Finds users whose wishlist contains the game (this service does **not** query the library database — the event must carry enough data or wishlist matching moves to User Library Service which publishes per-user notifications directly). 
 
-**Phase 1 approach:** User Library Service is responsible for resolving wishlist matches at publish time and emitting one `listing.created` event per matching user. The Notification Service simply creates one notification per event received.
+**Phase 1 approach:** User Library Service is responsible for resolving wishlist matches at publish time and emitting one `listing.created` event per matching user. A user matches only when their wishlist entry is for the same game **and the same platform** as the listing (format does not need to match). The Notification Service simply creates one notification per event received.
 
 ```json
 {
