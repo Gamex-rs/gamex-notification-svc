@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Gamex.Notifications.Api/Gamex.Notifications.Api.csproj" />
+    <Project Path="src/Gamex.Notifications.Application/Gamex.Notifications.Application.csproj" />
+    <Project Path="src/Gamex.Notifications.Domain/Gamex.Notifications.Domain.csproj" />
+    <Project Path="src/Gamex.Notifications.Infrastructure/Gamex.Notifications.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Gamex.Notifications.IntegrationTests/Gamex.Notifications.IntegrationTests.csproj" />
+    <Project Path="tests/Gamex.Notifications.UnitTests/Gamex.Notifications.UnitTests.csproj" />
+  </Folder>
+</Solution>
