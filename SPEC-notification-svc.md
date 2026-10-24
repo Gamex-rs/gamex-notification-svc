@@ -147,7 +147,7 @@ Payload stored: `{ conversationId, senderName (resolved from event or future enr
 
 Finds users whose wishlist contains the game (this service does **not** query the library database — the event must carry enough data or wishlist matching moves to User Library Service which publishes per-user notifications directly). 
 
-**Phase 1 approach:** User Library Service is responsible for resolving wishlist matches at publish time and emitting one `listing.created` event per matching user. The Notification Service simply creates one notification per event received.
+**Phase 1 approach:** User Library Service is responsible for resolving wishlist matches at publish time and emitting one `listing.created` event per matching user. A user matches only when their wishlist entry is for the same game **and the same platform** as the listing (format does not need to match). The Notification Service simply creates one notification per event received.
 
 ```json
 {
@@ -258,3 +258,41 @@ volumes:
 | `JWT_PUBLIC_KEY` | RS256 public key (PEM) | SSM Parameter Store |
 | `SQS_ACTIVITY_EVENTS_URL` | Queue URL to consume | SSM Parameter Store |
 | `ASPNETCORE_ENVIRONMENT` | `Development` / `Production` | ECS task definition |
+
+---
+
+## 12. Implementation Notes (2026-10-24)
+
+Decisions taken while implementing; they refine the sections above.
+
+### 12.1 Payloads (the `data` object)
+
+Producers now enrich their events, so no name lookups are needed (this replaces the Phase 1 note in §7):
+
+| Type | `data` |
+|---|---|
+| `new_message` | `conversationId, senderId, senderName, gameTitle, listingId` |
+| `wishlist_match` | `listingId, gameId, gameTitle, sellerName, listingType (exchange/sale), platformSlug, format` |
+| `listing_expiring` | `listingId, gameTitle, expiresAt` |
+| `rate_your_partner` | `listingId, transactionId, gameTitle, partnerUserId, partnerName` (one per party; `transactionId` is what `POST /users/{id}/ratings` needs) |
+
+### 12.2 Consumer
+
+- All notifications of one SQS message are inserted in one transaction. A unique key on `(source_message_id, user_id)` makes redelivery idempotent: a duplicate is acknowledged without new notifications.
+- After commit: SignalR `NotificationReceived` (the notification as returned by the API) and `UnreadCountUpdated { count }` to `user:{userId}`.
+- Malformed events (invalid JSON, missing `eventType` or required ids) stay on the queue → DLQ after 3 receives. Events of an **unknown** `eventType` are logged and deleted, so new producers cannot clog the queue.
+- A leading UTF-8 BOM in a message body is tolerated.
+
+### 12.3 API details
+
+- `GET /notifications?cursor&pageSize` (default 20, max 50), newest first; items `{ id, type, read, createdAt, data }`.
+- `PUT /notifications/{id}/read` → `204`; another user's notification → `404`. `PUT /notifications/read-all` → `204`. Both push `UnreadCountUpdated` when something changed.
+
+### 12.4 Data model additions
+
+`notifications.source_message_id` VARCHAR(100) (SQS `MessageId`), unique `(source_message_id, user_id)`; `payload` is a MySQL `JSON` column.
+
+### 12.5 Operations
+
+- Several instances need a SignalR backplane (e.g. Redis) — not configured yet.
+- Additional environment variables: `JWT_ISSUER` / `JWT_AUDIENCE` (validated when set), `AWS_SERVICE_URL` / `AWS_DEFAULT_REGION` (LocalStack), `DB_MIGRATE_ON_STARTUP`.

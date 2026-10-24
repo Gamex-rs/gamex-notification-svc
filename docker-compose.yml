@@ -1,0 +1,54 @@
+services:
+  notification-svc:
+    build: .
+    ports:
+      - "5004:8080"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      # Development: migrations on startup; without JWT_PUBLIC_KEY every token is rejected (401).
+      # Use the public key the User Library Service logs at startup.
+      - ASPNETCORE_ENVIRONMENT=Development
+      - DB_CONNECTION_STRING=Server=notification-db;Database=notifications_db;User=root;Password=localdev;
+      - AWS_DEFAULT_REGION=eu-central-1
+      - AWS_SERVICE_URL=http://localstack:4566
+      - SQS_ACTIVITY_EVENTS_URL=http://localstack:4566/000000000000/gamex-activity-events
+      - JWT_ISSUER=gamex-user-library
+      - JWT_AUDIENCE=gamex
+    depends_on:
+      notification-db:
+        condition: service_healthy
+      localstack:
+        condition: service_healthy
+
+  notification-db:
+    image: mysql:8.0
+    environment:
+      MYSQL_DATABASE: notifications_db
+      MYSQL_ROOT_PASSWORD: localdev
+    ports:
+      - "3310:3306"
+    volumes:
+      - notification-db-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-plocaldev"]
+      interval: 5s
+      retries: 20
+
+  localstack:
+    image: localstack/localstack:3
+    ports:
+      - "4569:4566"
+    environment:
+      SERVICES: sqs
+      AWS_DEFAULT_REGION: eu-central-1
+    volumes:
+      - ./localstack-init:/etc/localstack/init/ready.d
+    healthcheck:
+      test: ["CMD", "awslocal", "sqs", "get-queue-url", "--queue-name", "gamex-activity-events"]
+      interval: 5s
+      retries: 20
+
+volumes:
+  notification-db-data:
